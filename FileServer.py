@@ -25,6 +25,8 @@ import re
 import threading
 from io import BytesIO
   
+import hashlib
+import json
 
 class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
  
@@ -45,12 +47,10 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Serve a GET request."""
-        
-        f = self.send_head()
+        f= self.send_head()
         if f:
             self.copyfile(f, self.wfile)
             f.close()
-
  
     def do_HEAD(self):
         """Serve a HEAD request."""
@@ -133,6 +133,29 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 preline = line
         return (False, "Unexpect Ends of data.")
  
+
+    def get_md5_small(self,file_path):
+      md5 = None
+      if os.path.isfile(file_path):
+        f = open(file_path,'rb')
+        md5_obj = hashlib.md5()
+        md5_obj.update(f.read())
+        hash_code = md5_obj.hexdigest()
+        f.close()
+        md5 = str(hash_code).lower()
+      return md5
+    def get_md5_big(self,file_path):
+      f = open(file_path,'rb')  
+      md5_obj = hashlib.md5()
+      while True:
+        d = f.read(8096)
+        if not d:
+          break
+        md5_obj.update(d)
+      hash_code = md5_obj.hexdigest()
+      f.close()
+      md5 = str(hash_code).lower()
+      return md5
     def send_head(self):
         """Common code for GET and HEAD commands.
 
@@ -146,7 +169,22 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         """
         path = self.translate_path(self.path)
         f = None
-        if os.path.isdir(path):
+        if self.path.endswith('?md5') is True:
+            if os.path.exists(path) is False:
+                return 'error not exist'
+            else:
+                md5 = self.get_md5_small(path)
+                print(md5)
+                f = BytesIO()
+                f.write(bytes(md5, encoding = "utf8"  ))
+                length = f.tell()
+                f.seek(0)
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.send_header("Content-Length", str(length))
+                self.end_headers()
+                return f
+        elif os.path.isdir(path):
             if not self.path.endswith('/'):
                 # redirect browser - doing basically what apache does
                 self.send_response(301)
@@ -176,9 +214,30 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(fs[6]))
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
         self.end_headers()
+
         return f
  
     def list_directory(self, path):
+        f = BytesIO()
+
+        filelist = []
+        for root, subFolder, files in os.walk(path):
+            for file in files:
+                #f.write(bytes(file, encoding = "utf8"))
+                filelist.append([file,root.replace(path,"")])
+
+
+        jsObj = json.dumps(filelist)
+        f.write(bytes(jsObj, encoding = "utf8"))
+        length = f.tell()
+        f.seek(0)
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.send_header("Content-Length", str(length))
+        self.end_headers()
+        return f
+
+    def list_directory_web(self, path):
         """Helper to produce a directory listing (absent index.html).
 
         Return value is either a file object, or None (indicating an
