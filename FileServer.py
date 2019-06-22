@@ -386,7 +386,7 @@ class SimpleHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
  
  
 def StartServer(HandlerClass = SimpleHTTPRequestHandler,
-         ServerClass = http.server.ThreadingHTTPServer):
+         ServerClass = http.server.HTTPServer):
     http.server.test(HandlerClass, ServerClass)
  
 if __name__ == '__main__':
